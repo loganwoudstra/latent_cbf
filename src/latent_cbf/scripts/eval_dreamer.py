@@ -44,7 +44,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our modules
 from configs import DreamerConfig, Config
-from configs.paths import TEST_RSSM_CHECKPOINT, TRAJS_DIR
+from configs.paths import RSSM_CHECKPOINT, TRAJS_DIR
 # import Dreamer from scripts/dreamer_offline.py
 from dreamer_offline import Dreamer
 
@@ -108,7 +108,7 @@ def main(config):
         logger,
         None,
     ).to(config.device)
-    filepath = str(TEST_RSSM_CHECKPOINT)
+    filepath = str(RSSM_CHECKPOINT)
     agent.load_state_dict(torch.load(filepath)['agent_state_dict'])
 
 
@@ -165,9 +165,13 @@ def main(config):
     actor_gradient_steps=config.actor_gradient_steps,
     )
     policy_gp_ckpt = torch.load(config.filter_directory_gp)
-    policy_nogp_ckpt = torch.load(config.filter_directory_nogp)
     policy_gp.load_state_dict(policy_gp_ckpt)
-    policy_nogp.load_state_dict(policy_nogp_ckpt)
+    # The no-GP filter is an optional ablation (scripts/wm_ddpg.py --no_gp); skip it if not trained.
+    if pathlib.Path(config.filter_directory_nogp).is_file():
+        policy_nogp.load_state_dict(torch.load(config.filter_directory_nogp))
+    else:
+        print(f"No-GP filter not found at {config.filter_directory_nogp}; skipping NoGP values.")
+        policy_nogp = None
     def evaluate_V(state, policy):
         tmp_obs = np.array(state)
         tmp_batch = Batch(obs = tmp_obs, info = Batch())
@@ -288,7 +292,8 @@ def main(config):
                     feat_detached = agent._wm.dynamics.get_feat(prior).detach().cpu().numpy().squeeze()
                     print('feat_detached', feat_detached.shape)
                     values_gp.append(evaluate_V(feat_detached, policy_gp))
-                    values_nogp.append(evaluate_V(feat_detached, policy_nogp))
+                    if policy_nogp is not None:
+                        values_nogp.append(evaluate_V(feat_detached, policy_nogp))
                     margin_gps.append(margin_gp)
                     margin_nogps.append(margin_nogp)
 
@@ -314,7 +319,8 @@ def main(config):
                     ax2.plot(np.tanh(margin_gp[:n+1]), 'g-', label='Margin GP', linewidth=1)
                     ax2.plot(np.tanh(margin_nogp[:n+1]), 'orange', label='Margin NoGP', linewidth=1)
                     ax2.plot(values_gp[:n+1], 'g', linestyle='--',label='Values GP', linewidth=1)
-                    ax2.plot(values_nogp[:n+1], 'orange', linestyle='--',label='Values NoGP', linewidth=1)
+                    if policy_nogp is not None:
+                        ax2.plot(values_nogp[:n+1], 'orange', linestyle='--',label='Values NoGP', linewidth=1)
                     ax2.plot(failures[:n+1], 'r-', label='Failures', linewidth=1)
                     ax2.axhline(y=0, color='black', linestyle='--', alpha=0.5)
                     ax2.axvline(x=8, color='black', linestyle='--', alpha=0.5)

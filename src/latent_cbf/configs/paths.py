@@ -29,3 +29,7 @@ FILTER_NOGP = DREAMER_DIR / "PyHJ/nogp/epoch_id_14/policy.pth"
 
 # Repo-relative file paths (not under DATA_ROOT).
 DIFFUSION4ROBOTICS_DEFAULTS = REPO_ROOT / "diffusion4robotics" / "defaults.yaml"
+
+# MuJoCo Menagerie checkout (sparse: franka_emika_panda only).
+MENAGERIE_DIR = Path.home() / ".cache" / "mujoco_menagerie"
+PANDA_XML = MENAGERIE_DIR / "franka_emika_panda" / "panda.xml"

@@ -1,6 +1,6 @@
 # Copyright (c) Sudeep Dasari, 2023
 
-"""BC finetune: dubins (obs_dim=1, ac_dim=1) + DiffusionUnet + RobomimicResNet."""
+"""BC finetune: DiffusionUnet + RobomimicResNet. Defaults are dubins (obs_dim=1, ac_dim=1); see --ac-dim/--obs-dim/--use-obs."""
 
 import argparse
 import os
@@ -41,7 +41,7 @@ def _load_defaults(path=None):
 
 
 def _parse_args():
-    p = argparse.ArgumentParser(description="Dubins diffusion BC finetune")
+    p = argparse.ArgumentParser(description="Diffusion BC (dubins defaults; franka_skittles via --ac-dim 7 --obs-dim 8 --use-obs)")
     p.add_argument("--buffer-path", type=str, required=True)
     p.add_argument("--cam-indexes", type=int, nargs="*", default=[0])
     p.add_argument("--exp-name", type=str, default="dubins_diffusion")
@@ -76,6 +76,11 @@ def _parse_args():
     p.add_argument("--eval-freq", type=int, default=500)
     p.add_argument("--save-freq", type=int, default=500)
     p.add_argument("--defaults", type=str, default=None, help="Override defaults.yaml path")
+    # defaults match dubins (1-D action, theta state, state not fed to the policy)
+    p.add_argument("--ac-dim", type=int, default=1, help="Action dimension (franka_skittles: 7)")
+    p.add_argument("--obs-dim", type=int, default=1, help="Proprio state dimension (franka_skittles: 8)")
+    p.add_argument("--use-obs", action="store_true", help="Condition the policy on the proprio state too")
+    p.add_argument("--no-wandb", action="store_true", help="Don't log to wandb")
     return p.parse_args()
 
 
@@ -125,6 +130,9 @@ def main():
         "feature_dim": args.feature_dim,
         "device": args.device,
         "eval_freq": args.eval_freq,
+        "ac_dim": args.ac_dim,
+        "obs_dim": args.obs_dim,
+        "use_obs": args.use_obs,
         "save_freq": args.save_freq,
         "checkpoint_dir": run_dir,
         "checkpoint_path": checkpoint_path,
@@ -134,7 +142,7 @@ def main():
         name=args.wandb_name,
         project=defaults["wandb"]["project"],
         group=args.exp_name,
-        debug=defaults["wandb"]["debug"],
+        debug=defaults["wandb"]["debug"] or args.no_wandb,
     )
 
     try:
@@ -155,10 +163,10 @@ def main():
         agent = DiffusionUnetAgent(
             features=features,
             shared_mlp=[],
-            odim=1,
+            odim=args.obs_dim,
             n_cams=n_cams,
-            use_obs=False,
-            ac_dim=1,
+            use_obs=args.use_obs,
+            ac_dim=args.ac_dim,
             ac_chunk=args.ac_chunk,
             train_diffusion_steps=defaults["train_diffusion_steps"],
             eval_diffusion_steps=defaults["eval_diffusion_steps"],
@@ -179,8 +187,9 @@ def main():
                         **r,
                     },
                     "agent": "DiffusionUnetAgent",
-                    "odim": 1,
-                    "ac_dim": 1,
+                    "odim": args.obs_dim,
+                    "ac_dim": args.ac_dim,
+                    "use_obs": args.use_obs,
                     "n_cams": n_cams,
                     "noise_net_kwargs": defaults["noise_net_kwargs"],
                 },
@@ -209,7 +218,7 @@ def main():
             mode="train",
             cam_indexes=args.cam_indexes,
             past_frames=past_frames,
-            ac_dim=1,
+            ac_dim=args.ac_dim,
             artifact_dir=run_dir,
         )
         test_buffer = RobobufReplayBuffer(
@@ -220,15 +229,15 @@ def main():
             mode="test",
             cam_indexes=args.cam_indexes,
             past_frames=past_frames,
-            ac_dim=1,
+            ac_dim=args.ac_dim,
             artifact_dir=run_dir,
         )
         task = BCTask(
             train_buffer,
             test_buffer,
             n_cams=n_cams,
-            obs_dim=1,
-            ac_dim=1,
+            obs_dim=args.obs_dim,
+            ac_dim=args.ac_dim,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
         )

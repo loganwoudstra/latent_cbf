@@ -160,3 +160,12 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+
+# Model checkpoints (normally under data/, but don't push any that end up elsewhere)
+*.ckpt
+
+# Isaac Sim / Omniverse streaming session logs (NvStreamer-*.etli, 10-70 MB each)
+*.etli
+
+# Personal notes (machine setup, IPs)
+notes.md
